@@ -345,7 +345,7 @@ if edit_btn and follow_up:
             st.session_state.last_variants[idx] = result
 
         st.success("Content edited! See new result above.")
-        st.rerun()  # updated rerun call
+       # st.rerun()  # updated rerun call
 
     except Exception as e:
         st.error(f"Edit Error: {e}")
