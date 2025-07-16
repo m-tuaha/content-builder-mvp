@@ -293,6 +293,6 @@ if st.session_state.last_output:
                 idx = st.session_state.selected_variant if "selected_variant" in st.session_state else 0
                 st.session_state.last_variants[idx] = result
             st.success("Content edited! See new result above.")
-            st.experimental_rerun()
+            st.rerun()
         except Exception as e:
             st.error(f"Edit Error: {e}")
