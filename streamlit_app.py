@@ -157,11 +157,15 @@ Fallback/Error json:
 
 Only use these schemas for output. Never return any other fields or content."""
 
-# ---- Initialize chat history for context management ---- 
+# ---- Initialize chat history and debug fields for context management ----
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = [
         {"role": "system", "content": system_prompt}
     ]
+if "raw_input_text" not in st.session_state:
+    st.session_state.raw_input_text = ""
+if "raw_output_text" not in st.session_state:
+    st.session_state.raw_output_text = ""
 
 # ---- Input Form ----
 with st.form("campaign_form"):
@@ -209,7 +213,7 @@ if generate_btn and prompt:
 
     try:
         response = client.chat.completions.create(
-            model="gpt-4o-mini",              # use a supported model
+            model="gpt-4o",  # or gpt-4o-mini if you have access
             messages=st.session_state.chat_history,
             max_tokens=2000,
             temperature=0.7,
@@ -219,7 +223,6 @@ if generate_btn and prompt:
         variant_list = []
         for i in range(int(variants)):
             output = response.choices[i].message.content
-            st.write("RAW GPT OUTPUT:", output)   # for debugging
             result = json.loads(output)
             variant_list.append(result)
 
@@ -227,13 +230,17 @@ if generate_btn and prompt:
         st.session_state.selected_variant = 0
         st.session_state.last_output = variant_list[0]
 
-        # ---- CRUCIAL: Reset chat_history to just system + user + assistant (of selected variant) ----
+        # ---- Reset chat_history to just system + user + assistant (of selected variant) ----
         st.session_state.chat_history = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": str(input_json)},
             {"role": "assistant", "content": json.dumps(st.session_state.last_output)}
         ]
-        # This matches Playground: only the selected variant is context for next edit.
+
+        # ---- Store RAW INPUT and RAW OUTPUT for always-visible debug ----
+        import json
+        st.session_state.raw_input_text = json.dumps(st.session_state.chat_history, indent=2)
+        st.session_state.raw_output_text = json.dumps(st.session_state.last_output, indent=2)
 
     except Exception as e:
         st.error(f"OpenAI API Error: {e}")
@@ -249,10 +256,8 @@ if st.session_state.last_variants:
         st.session_state.last_output = st.session_state.last_variants[idx]
         st.session_state.selected_variant = idx
 
-        # ---- CRUCIAL: Update chat_history to reflect newly selected variant ----
-        # (So that edits use the correct previous assistant message)
+        # ---- Update chat_history to reflect newly selected variant ----
         if "chat_history" in st.session_state and st.session_state.chat_history:
-            # Only update if after a new generation
             if (len(st.session_state.chat_history) == 3 and 
                 st.session_state.chat_history[2]["role"] == "assistant"):
                 st.session_state.chat_history[2]["content"] = json.dumps(st.session_state.last_output)
@@ -301,59 +306,55 @@ if st.session_state.last_output:
                 })
         st.session_state.last_output["buttons"] = new_buttons
 
-if "api_debug_request" in st.session_state:
-    st.markdown("### Debug: API Request (messages)")
-    st.write(st.session_state.api_debug_request)
-if "api_debug_response" in st.session_state:
-    st.markdown("### Debug: RAW GPT Output")
-    st.write(st.session_state.api_debug_response)
-
-    
     st.markdown("---")
     st.markdown("#### Follow-up Prompt (for edits)")
     follow_up = st.text_input("Describe your change or revision", key="followup")
     edit_btn = st.button("Edit Content")
 
     # ---- EDIT CONTENT: continue the existing session ----
-if edit_btn and follow_up:
-    openai_api_key = st.secrets["OPENAI_API_KEY"]
-    client = openai.OpenAI(api_key=openai_api_key)
+    if edit_btn and follow_up:
+        openai_api_key = st.secrets["OPENAI_API_KEY"]
+        client = openai.OpenAI(api_key=openai_api_key)
 
-    # Append the edit instruction to chat history
-    st.session_state.chat_history.append(
-        {"role": "user", "content": follow_up}
-    )
-
-    try:
-        # Store the API request in session state before calling API
-        st.session_state.api_debug_request = list(st.session_state.chat_history)
-
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",            # use supported model
-            messages=st.session_state.chat_history,
-            max_tokens=2000,
-            temperature=0.7,
-        )
-        output = response.choices[0].message.content
-
-        # Store the raw output in session state for persistent debug
-        st.session_state.api_debug_response = output
-
-        result = json.loads(output)
-
-        # Append assistant response to chat history
+        # Append the edit instruction to chat history
         st.session_state.chat_history.append(
-            {"role": "assistant", "content": output}
+            {"role": "user", "content": follow_up}
         )
 
-        st.session_state.last_output = result
-        # Update the variant list if applicable
-        if st.session_state.last_variants:
-            idx = st.session_state.selected_variant
-            st.session_state.last_variants[idx] = result
+        try:
+            response = client.chat.completions.create(
+                model="gpt-4o",  # or gpt-4o-mini if you have access
+                messages=st.session_state.chat_history,
+                max_tokens=2000,
+                temperature=0.7,
+            )
+            output = response.choices[0].message.content
 
-        st.success("Content edited! See new result above.")
-        #st.rerun()  # rerun is OK now since debug is in session state
+            result = json.loads(output)
 
-    except Exception as e:
-        st.error(f"Edit Error: {e}")
+            # Append assistant response to chat history
+            st.session_state.chat_history.append(
+                {"role": "assistant", "content": output}
+            )
+
+            st.session_state.last_output = result
+            if st.session_state.last_variants:
+                idx = st.session_state.selected_variant
+                st.session_state.last_variants[idx] = result
+
+            # ---- Store RAW INPUT and RAW OUTPUT for always-visible debug ----
+            st.session_state.raw_input_text = json.dumps(st.session_state.chat_history, indent=2)
+            st.session_state.raw_output_text = output
+
+            st.success("Content edited! See new result above.")
+            st.rerun()
+
+        except Exception as e:
+            st.error(f"Edit Error: {e}")
+
+# ---- Always display RAW INPUT and RAW OUTPUT text areas ----
+st.markdown("#### RAW INPUT (API Request Messages)")
+st.text_area("RAW INPUT", st.session_state.raw_input_text, height=220)
+
+st.markdown("#### RAW OUTPUT (GPT Response)")
+st.text_area("RAW OUTPUT", st.session_state.raw_output_text, height=220)
