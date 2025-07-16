@@ -316,20 +316,20 @@ if edit_btn and follow_up:
         {"role": "user", "content": follow_up}
     )
 
-    # SHOW the API request being sent
-    st.write("API REQUEST (messages):", st.session_state.chat_history)
-
     try:
+        # Store the API request in session state before calling API
+        st.session_state.api_debug_request = list(st.session_state.chat_history)
+
         response = client.chat.completions.create(
-            model="gpt-4o-mini",            # use supported model
+            model="gpt-4o",            # use supported model
             messages=st.session_state.chat_history,
             max_tokens=2000,
             temperature=0.7,
         )
         output = response.choices[0].message.content
 
-        # SHOW the raw output received from OpenAI
-        st.write("RAW GPT OUTPUT:", output)
+        # Store the raw output in session state for persistent debug
+        st.session_state.api_debug_response = output
 
         result = json.loads(output)
 
@@ -345,7 +345,13 @@ if edit_btn and follow_up:
             st.session_state.last_variants[idx] = result
 
         st.success("Content edited! See new result above.")
-       # st.rerun()  # updated rerun call
+        st.rerun()  # rerun is OK now since debug is in session state
 
     except Exception as e:
         st.error(f"Edit Error: {e}")
+
+# ---- (Place this anywhere after your edit block, e.g. after output fields) ----
+if "api_debug_request" in st.session_state:
+    st.write("API REQUEST (messages):", st.session_state.api_debug_request)
+if "api_debug_response" in st.session_state:
+    st.write("RAW GPT OUTPUT:", st.session_state.api_debug_response)
