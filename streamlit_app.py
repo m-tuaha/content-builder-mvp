@@ -301,6 +301,14 @@ if st.session_state.last_output:
                 })
         st.session_state.last_output["buttons"] = new_buttons
 
+if "api_debug_request" in st.session_state:
+    st.markdown("### Debug: API Request (messages)")
+    st.write(st.session_state.api_debug_request)
+if "api_debug_response" in st.session_state:
+    st.markdown("### Debug: RAW GPT Output")
+    st.write(st.session_state.api_debug_response)
+
+    
     st.markdown("---")
     st.markdown("#### Follow-up Prompt (for edits)")
     follow_up = st.text_input("Describe your change or revision", key="followup")
@@ -321,7 +329,7 @@ if edit_btn and follow_up:
         st.session_state.api_debug_request = list(st.session_state.chat_history)
 
         response = client.chat.completions.create(
-            model="gpt-4o",            # use supported model
+            model="gpt-4o-mini",            # use supported model
             messages=st.session_state.chat_history,
             max_tokens=2000,
             temperature=0.7,
@@ -345,13 +353,7 @@ if edit_btn and follow_up:
             st.session_state.last_variants[idx] = result
 
         st.success("Content edited! See new result above.")
-        st.rerun()  # rerun is OK now since debug is in session state
+        #st.rerun()  # rerun is OK now since debug is in session state
 
     except Exception as e:
         st.error(f"Edit Error: {e}")
-
-# ---- (Place this anywhere after your edit block, e.g. after output fields) ----
-if "api_debug_request" in st.session_state:
-    st.write("API REQUEST (messages):", st.session_state.api_debug_request)
-if "api_debug_response" in st.session_state:
-    st.write("RAW GPT OUTPUT:", st.session_state.api_debug_response)
