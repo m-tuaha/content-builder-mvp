@@ -102,9 +102,7 @@ No header/footer, but clear CTA text is encouraged. Max 1000 characters.
 
 EDITING & VARIANTS
 
-If an edit_id is provided in the input, generate a revised variant of the previously created message for the same campaign.
-
-If no edit_id, treat as a new campaign message.
+When a user message contains an edit_instruction, base_campaign, and previous_output, you must treat this as a revision request. Apply the edit_instruction to revise the previous_output, taking into account the original campaign described in base_campaign.
 
 FALLBACK POLICY
 
@@ -213,7 +211,7 @@ if generate_btn and prompt:
 
     try:
         response = client.chat.completions.create(
-            model="gpt-4o",  # or gpt-4o-mini if you have access
+            model="gpt-4o-mini",  # or gpt-4o-mini if you have access
             messages=st.session_state.chat_history,
             max_tokens=2000,
             temperature=0.7,
@@ -312,49 +310,52 @@ if st.session_state.last_output:
     edit_btn = st.button("Edit Content")
 
     # ---- EDIT CONTENT: continue the existing session ----
-    if edit_btn and follow_up:
-        openai_api_key = st.secrets["OPENAI_API_KEY"]
-        client = openai.OpenAI(api_key=openai_api_key)
+if edit_btn and follow_up:
+    openai_api_key = st.secrets["OPENAI_API_KEY"]
+    client = openai.OpenAI(api_key=openai_api_key)
 
-        # Append the edit instruction to chat history
+    # Instead of just appending the raw follow-up, structure it:
+    # This helps GPT understand what to edit and with what instructions
+    base_user_content = st.session_state.chat_history[1]["content"]  # The original campaign input
+    previous_output_content = st.session_state.chat_history[2]["content"]  # Last assistant response
+
+    followup_message = {
+        "role": "user",
+        "content": json.dumps({
+            "edit_instruction": follow_up,
+            "base_campaign": base_user_content,
+            "previous_output": previous_output_content
+        })
+    }
+    st.session_state.chat_history.append(followup_message)
+
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=st.session_state.chat_history,
+            max_tokens=2000,
+            temperature=0.7,
+        )
+        output = response.choices[0].message.content
+
+        result = json.loads(output)
+
+        # Append assistant response to chat history
         st.session_state.chat_history.append(
-            {"role": "user", "content": follow_up}
+            {"role": "assistant", "content": output}
         )
 
-        try:
-            response = client.chat.completions.create(
-                model="gpt-4o",  # or gpt-4o-mini if you have access
-                messages=st.session_state.chat_history,
-                max_tokens=2000,
-                temperature=0.7,
-            )
-            output = response.choices[0].message.content
+        st.session_state.last_output = result
+        if st.session_state.last_variants:
+            idx = st.session_state.selected_variant
+            st.session_state.last_variants[idx] = result
 
-            result = json.loads(output)
+        # ---- Store RAW INPUT and RAW OUTPUT for always-visible debug ----
+        st.session_state.raw_input_text = json.dumps(st.session_state.chat_history, indent=2)
+        st.session_state.raw_output_text = output
 
-            # Append assistant response to chat history
-            st.session_state.chat_history.append(
-                {"role": "assistant", "content": output}
-            )
+        st.success("Content edited! See new result above.")
+        st.rerun()
 
-            st.session_state.last_output = result
-            if st.session_state.last_variants:
-                idx = st.session_state.selected_variant
-                st.session_state.last_variants[idx] = result
-
-            # ---- Store RAW INPUT and RAW OUTPUT for always-visible debug ----
-            st.session_state.raw_input_text = json.dumps(st.session_state.chat_history, indent=2)
-            st.session_state.raw_output_text = output
-
-            st.success("Content edited! See new result above.")
-            st.rerun()
-
-        except Exception as e:
-            st.error(f"Edit Error: {e}")
-
-# ---- Always display RAW INPUT and RAW OUTPUT text areas ----
-st.markdown("#### RAW INPUT (API Request Messages)")
-st.text_area("RAW INPUT", st.session_state.raw_input_text, height=220)
-
-st.markdown("#### RAW OUTPUT (GPT Response)")
-st.text_area("RAW OUTPUT", st.session_state.raw_output_text, height=220)
+    except Exception as e:
+        st.error(f"Edit Error: {e}")
