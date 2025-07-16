@@ -102,9 +102,9 @@ No header/footer, but clear CTA text is encouraged. Max 1000 characters.
 
 EDITING & VARIANTS
 
-If an edit_id is provided in the input, generate a revised variant of the previously created message for the same campaign.
-
-If no edit_id, treat as a new campaign message.
+When a follow-up instruction is provided, always treat it as an explicit request to edit the last campaign message for the specific variant_id you generated in this conversation. Unless the instruction specifically says to rewrite or change everything, keep all original campaign details, offers, and structure, and only change or add what is directly requested. 
+Never drop or generalize previous content unless told to do so. 
+Always build upon the previous message for edits.
 
 FALLBACK POLICY
 
