@@ -185,7 +185,7 @@ Fallback/Error json:
 Only use these schemas for output. Never return any other fields or content."""
     try:
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": str(input_json)}
